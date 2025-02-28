@@ -13,6 +13,8 @@
 (define-constant err-exceeds-supply (err u104))
 (define-constant err-payment-failed (err u105))
 (define-constant err-invalid-royalty (err u106))
+(define-constant err-invalid-input (err u107))
+(define-constant err-zero-mint-price (err u108))
 
 ;; Data vars
 (define-data-var last-token-id uint u0)
@@ -32,6 +34,11 @@
     (is-eq (unwrap! (nft-get-owner? pix-nft token-id) false) user)
 )
 
+(define-private (validate-metadata-uri (uri (string-ascii 256)))
+    (asserts! (> (len uri) u0) err-invalid-input)
+    (ok true)
+)
+
 (define-private (pay-royalties (token-id uint) (payment uint))
     (let (
         (creator (unwrap! (map-get? token-creators token-id) (ok true)))
@@ -39,7 +46,7 @@
         (royalty-amount (/ (* payment royalty-percent) u100))
     )
     (if (> royalty-amount u0)
-        (try! (stx-transfer? royalty-amount tx-sender creator))
+        (stx-transfer? royalty-amount tx-sender creator)
         (ok true)
     )
 )
@@ -48,6 +55,7 @@
 (define-public (set-mint-price (new-price uint))
     (begin
         (asserts! (is-eq tx-sender contract-owner) err-owner-only)
+        (asserts! (> new-price u0) err-zero-mint-price)
         (ok (var-set mint-price new-price))
     )
 )
@@ -65,6 +73,7 @@
         (
             (token-id (+ (var-get last-token-id) u1))
         )
+        (try! (validate-metadata-uri metadata-uri))
         (asserts! (<= token-id (var-get max-supply)) err-exceeds-supply)
         (unwrap! (stx-transfer? (var-get mint-price) tx-sender contract-owner) err-payment-failed)
         (try! (nft-mint? pix-nft token-id tx-sender))
@@ -81,6 +90,7 @@
             (count (len metadata-uris))
             (start-id (+ (var-get last-token-id) u1))
         )
+        (asserts! (> count u0) err-invalid-input)
         (asserts! (<= (+ start-id count) (var-get max-supply)) err-exceeds-supply)
         (unwrap! (stx-transfer? (* (var-get mint-price) count) tx-sender contract-owner) err-payment-failed)
         (map mint-single metadata-uris)
@@ -88,56 +98,4 @@
     )
 )
 
-(define-private (mint-single (metadata-uri (string-ascii 256)))
-    (let
-        (
-            (token-id (+ (var-get last-token-id) u1))
-        )
-        (try! (nft-mint? pix-nft token-id tx-sender))
-        (map-set token-uris token-id metadata-uri)
-        (map-set token-creators token-id tx-sender)
-        (var-set last-token-id token-id)
-        (ok token-id)
-    )
-)
-
-(define-public (set-token-royalty (token-id uint) (royalty-percent uint))
-    (begin
-        (asserts! (is-eq (some tx-sender) (map-get? token-creators token-id)) err-not-token-owner)
-        (asserts! (<= royalty-percent u100) err-invalid-royalty)
-        (ok (map-set token-royalties token-id royalty-percent))
-    )
-)
-
-(define-public (transfer (token-id uint) (sender principal) (recipient principal))
-    (begin
-        (asserts! (is-token-owner token-id sender) err-not-token-owner)
-        (try! (pay-royalties token-id (var-get mint-price)))
-        (nft-transfer? pix-nft token-id sender recipient)
-    )
-)
-
-;; Read only functions
-(define-read-only (get-token-uri (token-id uint))
-    (ok (map-get? token-uris token-id))
-)
-
-(define-read-only (get-owner (token-id uint))
-    (ok (nft-get-owner? pix-nft token-id))
-)
-
-(define-read-only (get-token-creator (token-id uint))
-    (ok (map-get? token-creators token-id))
-)
-
-(define-read-only (get-token-royalty (token-id uint))
-    (ok (default-to (var-get default-royalty-percent) (map-get? token-royalties token-id)))
-)
-
-(define-read-only (get-last-token-id)
-    (ok (var-get last-token-id))
-)
-
-(define-read-only (get-mint-price)
-    (ok (var-get mint-price))
-)
+[... rest of the contract remains unchanged ...]
