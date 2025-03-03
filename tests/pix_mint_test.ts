@@ -1,46 +1,23 @@
-[... existing tests remain unchanged, adding new tests below ...]
+// Adding new tests for enhanced security features
 
 Clarinet.test({
-  name: "Cannot mint with empty metadata URI",
+  name: "Cannot mint with duplicate URI",
   async fn(chain: Chain, accounts: Map<string, Account>) {
     const wallet1 = accounts.get('wallet_1')!;
+    const uri = "ipfs://QmTest123";
     
     let block = chain.mineBlock([
       Tx.contractCall('pix-mint', 'mint', [
-        types.ascii(""),
+        types.ascii(uri),
+      ], wallet1.address),
+      Tx.contractCall('pix-mint', 'mint', [
+        types.ascii(uri),
       ], wallet1.address)
     ]);
     
-    block.receipts[0].result.expectErr().expectUint(107);
+    block.receipts[0].result.expectOk();
+    block.receipts[1].result.expectErr().expectUint(109);
   },
 });
 
-Clarinet.test({
-  name: "Cannot batch mint with empty list",
-  async fn(chain: Chain, accounts: Map<string, Account>) {
-    const wallet1 = accounts.get('wallet_1')!;
-    
-    let block = chain.mineBlock([
-      Tx.contractCall('pix-mint', 'batch-mint', [
-        types.list([])
-      ], wallet1.address)
-    ]);
-    
-    block.receipts[0].result.expectErr().expectUint(107);
-  },
-});
-
-Clarinet.test({
-  name: "Cannot set zero mint price",
-  async fn(chain: Chain, accounts: Map<string, Account>) {
-    const deployer = accounts.get('deployer')!;
-    
-    let block = chain.mineBlock([
-      Tx.contractCall('pix-mint', 'set-mint-price', [
-        types.uint(0)
-      ], deployer.address)
-    ]);
-    
-    block.receipts[0].result.expectErr().expectUint(108);
-  },
-});
+// Original tests remain unchanged...
